@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Manifest & Checksum Generation Toolkit — Complete User Guide</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --fg:#111827; --muted:#6b7280; --link:#2563eb; --bg:#ffffff; --codebg:#f3f4f6; }
+  body { font: 16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Arial; color:var(--fg); background:var(--bg); margin:2rem auto; max-width: 1000px; padding:0 1rem; }
+  h1,h2,h3,h4 { line-height:1.25; }
+  h1 { font-size: 2rem; margin-top:0; }
+  h2 { margin-top:2rem; }
+  h3 { margin-top:1.5rem; }
+  p,ul,ol,pre,table { margin:.75rem 0; }
+  code,pre { background:var(--codebg); border-radius:6px; }
+  code { padding:.15rem .35rem; }
+  pre { padding:1rem; overflow:auto; }
+  a { color:var(--link); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  nav { background:#f8fafc; border:1px solid #e5e7eb; border-radius:10px; padding:1rem; margin:1.25rem 0 2rem; }
+  nav ul { padding-left:1.25rem; margin:.25rem 0; }
+  .hint{background:#ecfeff;border:1px solid #a5f3fc;border-radius:8px;padding:.75rem;margin:1rem 0;}
+  .warn{background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:.75rem;margin:1rem 0;}
+  table { border-collapse:collapse; width:100%; }
+  th,td { text-align:left; border-bottom:1px solid #e5e7eb; padding:.5rem .5rem; }
+  .toc small{color:var(--muted);}
+  .kbd{font-family:ui-monospace,Menlo,Consolas,monospace;background:#eef2ff;border:1px solid #c7d2fe;border-bottom-width:2px;border-radius:4px;padding:0 .4rem;}
+</style>
+</head>
+<body>
+
+<h1>Manifest &amp; Checksum Generation Toolkit — Complete User Guide</h1>
+<p>This guide documents how to use the two scripts, the binary formats they produce, and <strong>all configuration/text files</strong> they read — including complete schemas, examples, and precedence rules.</p>
+
+<nav class="toc">
+  <strong>Table of Contents</strong><br><small>(click to jump)</small>
+  <ul>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#whats-included">What’s Included</a></li>
+    <li><a href="#prereqs">Prerequisites</a></li>
+    <li><a href="#quickstart">Quick Start</a></li>
+    <li><a href="#configs">Configuration &amp; Text Files</a>
+      <ul>
+        <li><a href="#minfootprint">minfootprint.txt</a></li>
+        <li><a href="#specialflags">special_file_flags.ini</a></li>
+        <li><a href="#precedence">Precedence &amp; Merge Rules</a></li>
+      </ul>
+    </li>
+    <li><a href="#usage">Detailed Usage</a>
+      <ul>
+        <li><a href="#manifestgen">Manifest Generator</a></li>
+        <li><a href="#checksumgen">Checksum Generator</a></li>
+      </ul>
+    </li>
+    <li><a href="#formats">File &amp; Binary Formats</a>
+      <ul>
+        <li><a href="#index-format">.index (pickle)</a></li>
+        <li><a href="#dat-format">.dat (compiled storage)</a></li>
+        <li><a href="#manifest-format">.manifest (binary)</a></li>
+        <li><a href="#checksums-format">.checksums (binary)</a></li>
+      </ul>
+    </li>
+    <li><a href="#examples">Working Examples</a></li>
+    <li><a href="#troubleshooting">Troubleshooting</a></li>
+    <li><a href="#faq">FAQ</a></li>
+  </ul>
+</nav>
+
+<h2 id="overview">Overview</h2>
+<p>The manifest generator crawls a content directory and writes four artifacts tied to a specific <code>&lt;app_id&gt;</code> and <code>&lt;app_version&gt;</code>:</p>
+<ul>
+  <li><code>.manifest</code> — packed binary manifest of the tree</li>
+  <li><code>.dat</code> — compiled storage of file bytes</li>
+  <li><code>.index</code> — pickle map of file id → {offset,length} into <code>.dat</code></li>
+  <li><code>.checksums</code> — one Adler‑32 per 32 KB chunk, per file id</li>
+</ul>
+<p>The checksum generator can be run independently whenever you need to rebuild only the <code>.checksums</code>.</p>
+
+<h2 id="whats-included">What’s Included</h2>
+<ul>
+  <li><strong>beta_manifest_generator_pmein1.py</strong> — builds <code>.manifest</code>, <code>.dat</code>, <code>.index</code>, and triggers <code>.checksums</code>.</li>
+  <li><strong>checksum_generator_from_compiled_storage.py</strong> — reads <code>.index</code> + <code>.dat</code> and emits <code>.checksums</code>.</li>
+</ul>
+
+<h2 id="prereqs">Prerequisites</h2>
+<ul>
+  <li>Python 3.9.13 (64‑bit). Encoding for file I/O is ascii/latin‑1 safe.</li>
+  <li>Run from a working directory where outputs should be written.</li>
+  <li>Paths inside the manifest are relative to the content root you pass on the CLI.</li>
+</ul>
+
+<h2 id="quickstart">Quick Start</h2>
+<ol>
+  <li><strong>Build everything from a content folder</strong><br>
+    <pre><code>python beta_manifest_generator_pmein1.py &lt;directory_path&gt; &lt;app_id_hex&gt; &lt;app_version_numeric&gt; &lt;4_char_fingerprint&gt;</code></pre>
+    <ul>
+      <li><code>app_id_hex</code> example: <code>0xDEADBEEF</code> (parsed to integer)</li>
+      <li><code>app_version_numeric</code>: digits only (non‑digits are stripped)</li>
+      <li><code>4_char_fingerprint</code>: exactly 4 ASCII characters (stored in manifest header)</li>
+    </ul>
+  </li>
+  <li><strong>(Re)generate checksums only</strong><br>
+    <pre><code>python checksum_generator_from_compiled_storage.py &lt;app_id&gt; &lt;app_version&gt;</code></pre>
+    Accepts decimal or <code>0x</code>-prefixed hex for <code>app_id</code>.
+  </li>
+</ol>
+
+<h2 id="configs">Configuration &amp; Text Files</h2>
+<p>Place the following files alongside the scripts (or in the current working directory when you run them).</p>
+
+<h3 id="minfootprint"><code>minfootprint.txt</code></h3>
+<p>Declares which files are part of the “minimum footprint” set. These are typically essential files the installer or updater should copy or ensure present.</p>
+
+<h4>Purpose</h4>
+<ul>
+  <li>Adds listed files to the <em>copy table</em> inside the manifest.</li>
+  <li>Automatically sets a “minfootprint (copy)” flag for each listed file (see Flags below).</li>
+</ul>
+
+<h4>File Format</h4>
+<ul>
+  <li>Plain text; one entry per line.</li>
+  <li>Encoding: ASCII/UTF‑8 safe; avoid BOM.</li>
+  <li>Comments: lines starting with <code>#</code> are ignored.</li>
+  <li>Whitespace: leading/trailing whitespace is trimmed.</li>
+  <li>Empty lines are ignored.</li>
+</ul>
+
+<h4>Paths &amp; Globs</h4>
+<ul>
+  <li>Entries are <strong>relative to the content root</strong> you pass on the CLI.</li>
+  <li><strong>Exact file</strong>: <code>bin/steamclient.dll</code></li>
+  <li><strong>Directory wildcard</strong> (recursive): <code>assets/*</code> (includes all files under <code>assets/</code>)</li>
+  <li>For unambiguous control, you may list individual files explicitly instead of wildcards.</li>
+</ul>
+
+<h4>Flags Applied</h4>
+<table>
+  <thead><tr><th>Condition</th><th>Resulting Flag</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td>File is listed in <code>minfootprint.txt</code></td><td><code>0x0000400A</code></td><td>Min‑footprint (copy)</td></tr>
+  </tbody>
+</table>
+
+<h4>Examples</h4>
+<pre><code># minfootprint.txt
+bin/steamclient.dll
+assets/*
+res/config/defaults.json
+</code></pre>
+
+<h4>Validation Checklist</h4>
+<ul>
+  <li>Verify paths match the relative paths that will appear in the manifest (case and separators).</li>
+  <li>Prefer explicit file entries for surgical control.</li>
+</ul>
+
+<hr>
+
+<h3 id="specialflags"><code>special_file_flags.ini</code></h3>
+<p>Overrides or assigns per‑file flags. Use this when a file requires behavior other than the defaults or the minfootprint copy behavior.</p>
+
+<h4>Purpose</h4>
+<ul>
+  <li>Set a specific 32‑bit flag value for individual files.</li>
+  <li>Supports a special “no‑overwrite” minfootprint mode.</li>
+</ul>
+
+<h4>File Format</h4>
+<ul>
+  <li>Plain text; one <code>key=value</code> per line. No INI sections.</li>
+  <li>Encoding: ASCII/UTF‑8 safe; avoid BOM.</li>
+  <li>Comments: lines starting with <code>#</code> or <code>;</code> are ignored.</li>
+  <li>Whitespace: leading/trailing whitespace around keys/values is trimmed.</li>
+</ul>
+
+<h4>Keys &amp; Values</h4>
+<ul>
+  <li><strong>key</strong>: relative file path inside the content tree (e.g., <code>bin/steamclient.dll</code>).</li>
+  <li><strong>value</strong>: 32‑bit flag as integer; accepted forms:
+    <ul>
+      <li>Hex with <code>0x</code> prefix (e.g., <code>0x400b</code>)</li>
+      <li>Hex without prefix (e.g., <code>400b</code>)</li>
+      <li>Decimal (e.g., <code>16395</code>)</li>
+    </ul>
+  </li>
+</ul>
+
+<h4>Recognized Flag Meanings</h4>
+<table>
+  <thead><tr><th>Flag</th><th>Name</th><th>Effect</th></tr></thead>
+  <tbody>
+    <tr><td><code>0x00004000</code></td><td>Default</td><td>Standard file entry (no special copy semantics)</td></tr>
+    <tr><td><code>0x0000400A</code></td><td>Min‑footprint (copy)</td><td>Ensure copied/installed; allows overwrite</td></tr>
+    <tr><td><code>0x0000400B</code></td><td>Min‑footprint (no‑overwrite)</td><td>Essential but should not overwrite an existing copy</td></tr>
+  </tbody>
+</table>
+<p class="hint"><strong>Note:</strong> You may use other bit values for future expansion; unknown bits are preserved but have no documented effect here.</p>
+
+<h4>Examples</h4>
+<pre><code># special_file_flags.ini
+bin/steamclient.dll = 0x400b      ; minfootprint, no-overwrite
+assets/common.vpk  = 0x4000       ; default
+readme.txt         = 0x400a       ; minfootprint, copy
+</code></pre>
+
+<h4>Validation Checklist</h4>
+<ul>
+  <li>Keys must exactly match the relative path used in the manifest.</li>
+  <li>Values must be valid 32‑bit integers (hex or decimal).</li>
+  <li>Prefer <code>0x400B</code> to force “no‑overwrite” semantics for minfootprint files.</li>
+</ul>
+
+<hr>
+
+<h3 id="precedence">Precedence &amp; Merge Rules</h3>
+<p>When the same file is mentioned in both files, the engine resolves behavior using these rules:</p>
+<ol>
+  <li><strong>Copy Table Membership</strong> (from <code>minfootprint.txt</code>): if a file is listed, it is always included in the manifest’s copy table (minfootprint set).</li>
+  <li><strong>Flag Source</strong>:
+    <ul>
+      <li>If <code>special_file_flags.ini</code> provides a value for that file, the flag is taken from <em>special_file_flags.ini</em>.</li>
+      <li>Otherwise, if listed only in <code>minfootprint.txt</code>, the flag defaults to <code>0x400A</code> (minfootprint copy).</li>
+      <li>If listed in neither, the flag defaults to <code>0x4000</code>.</li>
+    </ul>
+  </li>
+  <li><strong>Overwriting vs No‑Overwrite</strong>: choose <code>0x400A</code> for copy/overwrite; choose <code>0x400B</code> for no‑overwrite.</li>
+</ol>
+<p class="hint">This lets you keep <code>minfootprint.txt</code> simple (“what must be present”) and use <code>special_file_flags.ini</code> for precise policy (“how to copy”).</p>
+
+<h2 id="usage">Detailed Usage</h2>
+
+<h3 id="manifestgen">Manifest Generator</h3>
+<pre><code>python beta_manifest_generator_pmein1.py &lt;directory_path&gt; &lt;app_id_hex&gt; &lt;app_version_numeric&gt; &lt;4_char_fingerprint&gt;</code></pre>
+<ul>
+  <li><strong>directory_path</strong>: root of content to package.</li>
+  <li><strong>app_id_hex</strong>: for example <code>0x10203</code>; parsed to integer.</li>
+  <li><strong>app_version_numeric</strong>: numeric; non‑digits are removed.</li>
+  <li><strong>4_char_fingerprint</strong>: exactly 4 ASCII chars; also stores an Adler‑32 into the manifest header.</li>
+  <li><strong>Optional</strong>: include <code>minfootprint.txt</code> and/or <code>special_file_flags.ini</code> in the working directory.</li>
+</ul>
+
+<h3 id="checksumgen">Checksum Generator</h3>
+<pre><code>python checksum_generator_from_compiled_storage.py &lt;app_id&gt; &lt;app_version&gt;</code></pre>
+<ul>
+  <li>Input files: <code>&lt;app_id&gt;_&lt;app_version&gt;.index</code> and <code>.dat</code> in the working directory.</li>
+  <li>Chunking: 32 KB (0x8000); one Adler‑32 per chunk.</li>
+  <li>Header: <code>format_code=0x14893721</code>, <code>dummy0=0</code>, <code>fileIdCount</code>, <code>checksumCount</code>.</li>
+</ul>
+
+<h2 id="formats">File &amp; Binary Formats</h2>
+
+<h3 id="index-format"><code>.index</code> (pickle)</h3>
+<p>Python pickle mapping of <code>{ file_id: {"offset": &lt;int&gt;, "length": &lt;int&gt;} }</code>. File IDs are sequentially assigned as files are packed into <code>.dat</code>.</p>
+
+<h3 id="dat-format"><code>.dat</code> (compiled storage)</h3>
+<ul>
+  <li>Concatenation of raw file bytes in packing order.</li>
+  <li>Offsets/lengths recorded in <code>.index</code> allow direct slicing.</li>
+</ul>
+
+<h3 id="manifest-format"><code>.manifest</code> (binary)</h3>
+<ul>
+  <li>Header (little‑endian 32‑bit fields): version, app id, app version, node/file counts, <code>compressedblocksize=0x8000</code>, name table sizes, and totals.</li>
+  <li>Filename &amp; dirname string tables (UTF‑8), padded to 4‑byte boundaries.</li>
+  <li>Directory/file node tables with parent/child/sibling indices.</li>
+  <li>Hashtable section; sentinel on last bucket.</li>
+  <li>Copy table: indices of nodes included via <code>minfootprint.txt</code>.</li>
+  <li>Header patch: bytes <code>[0x30..0x38]</code> = 4‑byte fingerprint + 4‑byte Adler‑32.</li>
+</ul>
+
+<h3 id="checksums-format"><code>.checksums</code> (binary)</h3>
+<ul>
+  <li>Header: <code>&lt;IIII</code> — <code>0x14893721</code>, <code>0</code>, <code>fileIdCount</code>, <code>checksumCount</code>.</li>
+  <li>Index table: <code>fileIdCount</code> × <code>[chunkCount, firstChecksumIndex]</code> (dense 0..max; missing IDs get <code>0,0</code>).</li>
+  <li>Checksum table: <code>checksumCount</code> × 4‑byte Adler‑32 values in file‑then‑chunk order.</li>
+</ul>
+
+<h2 id="examples">Working Examples</h2>
+<pre><code># content tree
+content/
+├─ bin/steamclient.dll
+├─ assets/a.dat
+└─ res/config/defaults.json
+
+# configuration (cwd)
+minfootprint.txt
+special_file_flags.ini
+</code></pre>
+
+<pre><code># minfootprint.txt
+bin/steamclient.dll
+assets/*
+res/config/defaults.json
+</code></pre>
+
+<pre><code># special_file_flags.ini
+bin/steamclient.dll=0x400b
+assets/a.dat=0x4000
+</code></pre>
+
+<pre><code># run
+python beta_manifest_generator_pmein1.py content 0xDEADBEEF 12345 A1B!
+python checksum_generator_from_compiled_storage.py 3735928559 12345   # optional
+</code></pre>
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+<ul>
+  <li><strong>File not included in minfootprint</strong>: ensure the path in <code>minfootprint.txt</code> matches the manifest’s relative path (case, separators).</li>
+  <li><strong>Wildcard didn’t expand</strong>: replace with explicit file entries for deterministic behavior.</li>
+  <li><strong>Wrong overwrite behavior</strong>: set flag in <code>special_file_flags.ini</code> to <code>0x400A</code> (copy/overwrite) or <code>0x400B</code> (no‑overwrite).</li>
+  <li><strong>Checksum tool error “missing index/dat”</strong>: verify both files exist as <code>&lt;app_id&gt;_&lt;app_version&gt;.*</code> in the CWD.</li>
+</ul>
+
+<h2 id="faq">FAQ</h2>
+<p><strong>Q:</strong> Can I use absolute paths in the config files?<br>
+<strong>A:</strong> No. Always use paths relative to the content root you pass to the manifest generator.</p>
+<p><strong>Q:</strong> Do globs support <code>**</code>?<br>
+<strong>A:</strong> Use <code>dir/*</code> for recursive include. For strict control, list explicit files.</p>
+<p><strong>Q:</strong> Which flag wins when both configs mention a file?<br>
+<strong>A:</strong> Copy table membership comes from <code>minfootprint.txt</code>; the <em>flag value</em> (overwrite vs no‑overwrite) comes from <code>special_file_flags.ini</code> if present, otherwise defaults to <code>0x400A</code> for minfootprint or <code>0x4000</code> otherwise.</p>
+
+<hr>
+<p><em>Keep this HTML next to your scripts for quick reference.</em></p>
+
+</body>
+</html>

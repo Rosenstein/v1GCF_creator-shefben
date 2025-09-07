@@ -1,0 +1,6 @@
+Edit rename_to_lower.ps1and replace src_folder with the correct source dir path
+Run rename_to_lower.ps1
+Edit get-file-list.cmd and replace src_folder with the correct source dir path
+Run get-file-list
+In Notepad++, replace the full path with "", leaving only the files and relative paths
+Run beta_manifest_generator_pmein1.py src_folder app_id ver_id 4_digits i.e. beta_manifest_generator_pmein1.py cstrike 1 0 1111

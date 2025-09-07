@@ -1,0 +1,12 @@
+0 = hl1
+1 = cs
+2 = tfc
+3 = dmc
+4 = dod
+5 = op4
+6 = ricochet
+7 = ds
+8 = tracker
+9 = fw (self-assigned, not real as facewound didn't make it to steam)
+10 = ?
+11 = ?hl2 media? (from a forum post)
